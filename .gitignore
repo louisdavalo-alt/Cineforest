@@ -1,0 +1,23 @@
+# Secrets et configuration locale — NE JAMAIS COMMITTER
+.env
+.env.*
+!.env.example
+
+# Dépendances
+node_modules/
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Copies de sauvegarde (l'historique Git les remplace)
+*.bak
+*.bak*
+*.bak-*
+
+# Logs
+*.log
+npm-debug.log*

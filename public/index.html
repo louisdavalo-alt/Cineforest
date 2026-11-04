@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data: blob:; connect-src 'self' https://api.themoviedb.org https://www.omdbapi.com; font-src 'self' https://fonts.gstatic.com">
+<!-- Ollama est appelé via /api/ollama/chat (même origine, proxy dans server.js) : pas besoin d'ajouter son URL ici. -->
+<link rel="preconnect" href="https://image.tmdb.org">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CinéForest PRO — Avec recherche intelligente SLM</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter&display=swap:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+  :root {
+    --noir:#0a0a0f; --charbon:#12121a; --panneau:#1a1a26; --bordure:#2a2a3e;
+    --or:#f5c518; --rouge:#e63946; --bleu:#4361ee; --texte:#e8e8f0;
+    --muted:#7a7a9a; --vert:#06d6a0; --violet:#7b2fff; --cyan:#01b4e4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--noir);color:var(--texte);font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:0.4;}
+
+  /* HEADER */
+  header{position:relative;z-index:1;padding:36px 40px 24px;border-bottom:1px solid var(--bordure);display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;}
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:50px;line-height:1;letter-spacing:2px;color:var(--or);text-shadow:0 0 40px rgba(245,197,24,0.3);}
+  .logo span{color:var(--texte);}
+  .tagline{font-size:11px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;font-weight:500;}
+  .api-badges{display:flex;gap:8px;margin-left:auto;align-items:center;}
+
+  main{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:32px 40px 80px;}
+
+  /* CONFIG */
+  .config-panel{background:var(--panneau);border:1px solid var(--bordure);border-radius:14px;padding:28px;margin-bottom:32px;}
+  .section-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--or);letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+  .section-label::after{content:'';flex:1;height:1px;background:var(--bordure);}
+  .config-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:20px;}
+  .field{display:flex;flex-direction:column;gap:7px;}
+  .field label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);}
+  .field input,.field select{background:var(--charbon);border:1px solid var(--bordure);border-radius:8px;padding:10px 12px;color:var(--texte);font-family:'Inter',sans-serif;font-size:13px;outline:none;transition:border-color 0.2s;width:100%;}
+  .field input:focus,.field select:focus{border-color:var(--or);}
+  .field select option{background:var(--charbon);}
+
+  /* SLIDER */
+  .slider-wrap{display:flex;flex-direction:column;gap:6px;margin-bottom:22px;}
+  .slider-header{display:flex;justify-content:space-between;align-items:center;}
+  .slider-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);}
+  .slider-value{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--or);background:var(--charbon);border:1px solid var(--bordure);border-radius:6px;padding:2px 10px;min-width:52px;text-align:center;}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;outline:none;cursor:pointer;background:linear-gradient(to right,var(--or) 0%,var(--or) var(--pct,0%),var(--bordure) var(--pct,0%));}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--or);cursor:pointer;border:2px solid var(--noir);box-shadow:0 0 8px rgba(245,197,24,0.5);}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--or);cursor:pointer;border:2px solid var(--noir);}
+  .slider-ticks{display:flex;justify-content:space-between;}
+  .slider-ticks span{font-size:9px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+
+  /* CHIPS */
+  .chip-grid{display:flex;flex-wrap:wrap;gap:7px;}
+  .genre-chip,.nat-chip{cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid var(--bordure);background:var(--charbon);font-size:12px;transition:all 0.15s;user-select:none;}
+  .genre-chip input,.nat-chip input{display:none;}
+  .genre-chip.active{border-color:var(--or);background:rgba(245,197,24,0.12);color:var(--or);}
+  .nat-chip.active{border-color:var(--cyan);background:rgba(1,180,228,0.12);color:var(--cyan);}
+  .lang-auto-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:10px;font-size:10px;font-weight:600;background:rgba(6,214,160,0.12);border:1px solid var(--vert);color:var(--vert);margin-left:8px;transition:opacity 0.3s;}
+  .lang-auto-badge.hidden{opacity:0;pointer-events:none;}
+  .field-group{margin-bottom:18px;}
+  .field-group>.fg-label{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .fg-hint{font-size:10px;color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none;}
+
+  /* BOUTONS */
+  .btn-run{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:16px;background:var(--or);color:var(--noir);border:none;border-radius:10px;font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;cursor:pointer;transition:all 0.2s;margin-top:6px;}
+  .btn-run:hover{background:#ffd700;transform:translateY(-1px);box-shadow:0 8px 24px rgba(245,197,24,0.3);}
+  .btn-run:active{transform:translateY(0);}
+  .btn-run:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;}
+
+  /* PROGRESS */
+  #progress-zone{display:none;margin-bottom:32px;background:var(--panneau);border:1px solid var(--bordure);border-radius:12px;padding:22px 28px;}
+  .progress-bar-wrap{background:var(--charbon);border-radius:4px;height:5px;margin-top:14px;overflow:hidden;}
+  .progress-bar{height:100%;background:linear-gradient(90deg,var(--cyan),var(--or));border-radius:4px;transition:width 0.3s;width:0%;}
+  .progress-log{margin-top:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);max-height:110px;overflow-y:auto;line-height:1.8;}
+
+  /* RESULTATS */
+  #results-zone{display:none;}
+  .results-header{display:flex;align-items:baseline;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
+  .results-title{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:1px;color:var(--or);}
+  .results-sub{font-size:11px;color:var(--muted);}
+  .films-list{display:flex;flex-direction:column;gap:16px;}
+
+  /* FILM CARD */
+  .film-card{background:var(--panneau);border:1px solid var(--bordure);border-radius:14px;overflow:hidden;display:grid;grid-template-columns:120px 1fr;transition:border-color 0.2s,transform 0.2s;animation:slideIn 0.4s ease both;}
+  .film-card.replacing{animation:fadeOut 0.25s ease forwards;}
+  .film-card.new-entry{animation:slideIn 0.35s ease both;}
+  .film-card:hover{border-color:var(--or);transform:translateX(4px);}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-20px);}to{opacity:1;transform:translateX(0);}}
+  @keyframes fadeOut{from{opacity:1;}to{opacity:0;transform:translateX(20px);}}
+
+  /* POSTER */
+  .film-poster{width:120px;min-height:175px;background:var(--charbon);position:relative;flex-shrink:0;}
+  .film-poster img{width:100%;height:100%;object-fit:cover;display:block;
+  background:linear-gradient(135deg,var(--charbon) 0%,var(--panneau) 100%);
+  transition:opacity 0.3s;}
+.film-poster img[src=""]{opacity:0;}
+.film-poster img[src]:not([src=""]){opacity:1;}
+  .film-poster .no-poster{width:100%;min-height:175px;display:flex;align-items:center;justify-content:center;font-size:38px;color:var(--bordure);}
+  .film-rank-badge{position:absolute;top:8px;left:8px;font-family:'Bebas Neue',sans-serif;font-size:20px;background:rgba(0,0,0,0.8);color:var(--or);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+  .lang-badge{position:absolute;bottom:6px;left:0;right:0;text-align:center;font-size:9px;font-weight:700;letter-spacing:1.5px;background:rgba(1,180,228,0.85);color:#fff;padding:2px 0;}
+  .fixed-badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;background:rgba(245,197,24,0.85);color:#000;padding:2px 6px;border-radius:4px;}
+
+  /* BODY */
+  .film-body{padding:16px 18px;display:grid;grid-template-columns:1fr auto;gap:12px;}
+  .film-main{min-width:0;}
+  .film-title{font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:1px;line-height:1.1;margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .film-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .tag{font-size:10px;padding:3px 8px;border-radius:4px;font-weight:600;letter-spacing:0.5px;}
+  .tag-year{background:rgba(67,97,238,0.2);color:#7b9eff;}
+  .tag-genre{background:rgba(230,57,70,0.2);color:#ff7b84;}
+  .tag-pays{background:rgba(6,214,160,0.2);color:var(--vert);}
+  .tag-lang{background:rgba(1,180,228,0.2);color:var(--cyan);}
+  .tag-fixed{background:rgba(245,197,24,0.15);color:var(--or);}
+  .tag-rotating{background:rgba(123,47,255,0.2);color:#b57fff;}
+  .film-details{font-size:11px;color:var(--muted);line-height:2.0;}
+  .film-details strong{color:var(--texte);font-weight:500;}
+  .film-synopsis{font-size:11px;color:var(--muted);line-height:1.6;margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .cast-list{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+  .cast-chip{font-size:10px;padding:3px 8px;background:var(--charbon);border:1px solid var(--bordure);border-radius:10px;color:var(--muted);}
+
+  /* BOUTONS FILM */
+  .film-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;}
+  .trailer-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;background:rgba(230,57,70,0.15);border:1px solid var(--rouge);color:#ff7b84;font-size:10px;font-weight:600;text-decoration:none;transition:background 0.15s;cursor:pointer;}
+  .trailer-btn:hover{background:rgba(230,57,70,0.3);}
+
+  /* BOUTON DEJA VU */
+  .seen-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:6px;background:rgba(123,47,255,0.15);border:1px solid var(--violet);color:#b57fff;font-size:10px;font-weight:600;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+  .seen-btn:hover{background:rgba(123,47,255,0.3);transform:scale(1.03);}
+  .seen-btn:active{transform:scale(0.97);}
+  .seen-btn.loading{opacity:0.5;pointer-events:none;}
+
+  /* SCORES */
+  .film-scores{text-align:right;min-width:96px;flex-shrink:0;}
+  .score-block{margin-bottom:8px;}
+  .score-label{font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:1px;}
+  .score-imdb{font-family:'Bebas Neue',sans-serif;font-size:30px;color:var(--or);line-height:1;}
+  .score-tmdb{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--cyan);line-height:1;}
+  .score-rt{font-family:'Bebas Neue',sans-serif;font-size:17px;color:var(--vert);line-height:1;}
+  .stars{color:var(--or);font-size:11px;letter-spacing:1px;}
+  .rf-score{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--vert);margin-top:7px;padding-top:7px;border-top:1px solid var(--bordure);}
+
+  /* RF PANEL */
+  .rf-panel{margin-top:32px;background:var(--panneau);border:1px solid var(--bordure);border-radius:12px;padding:22px 26px;}
+  .importance-bars{margin-top:16px;}
+  .importance-row{display:grid;grid-template-columns:150px 1fr 50px;align-items:center;gap:12px;margin-bottom:10px;}
+  .imp-label{font-size:11px;color:var(--muted);font-weight:500;text-align:right;}
+  .imp-bar-wrap{background:var(--charbon);border-radius:3px;height:7px;overflow:hidden;}
+  .imp-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--bleu),var(--cyan));transition:width 1s ease;width:0%;}
+  .imp-value{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cyan);}
+  .error-box{background:rgba(230,57,70,0.12);border:1px solid var(--rouge);border-radius:10px;padding:14px 18px;font-size:13px;color:#ff7b84;margin-top:14px;display:none;}
+
+  /* Spinner inline */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{width:12px;height:12px;border:2px solid rgba(255,255,255,0.2);border-top-color:#fff;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;}
+
+
+
+  /* ── BARRE SLM ── */
+  .slm-section{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 40px 20px;}
+  .slm-panel{background:var(--panneau);border:1px solid var(--bordure);border-radius:14px;padding:22px 24px;}
+  .slm-top{display:flex;gap:10px;align-items:center;margin-bottom:14px;}
+  .slm-input-wrap{flex:1;position:relative;}
+  .slm-input{width:100%;background:var(--charbon);border:1.5px solid var(--bordure);border-radius:10px;padding:13px 44px 13px 16px;color:var(--texte);font-family:'Inter',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s;}
+  .slm-input:focus{border-color:var(--violet);}
+  .slm-input::placeholder{color:var(--muted);}
+  .slm-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;transition:color 0.15s;}
+  .slm-clear:hover{color:var(--texte);}
+  .slm-btn{padding:13px 22px;background:var(--violet);border:none;border-radius:10px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:1.5px;cursor:pointer;transition:all 0.2s;white-space:nowrap;flex-shrink:0;}
+  .slm-btn:hover{background:#9b50ff;transform:translateY(-1px);box-shadow:0 6px 20px rgba(123,47,255,0.4);}
+  .slm-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;}
+
+  /* suggestions rapides */
+  .slm-suggestions{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
+  .slm-sugg{font-size:11px;padding:4px 11px;border-radius:14px;border:1px solid var(--bordure);background:var(--charbon);color:var(--muted);cursor:pointer;transition:all 0.15s;}
+  .slm-sugg:hover{border-color:var(--violet);color:#b57fff;background:rgba(123,47,255,0.12);}
+
+  /* tokens NLP parsés */
+  .slm-parsed{display:flex;flex-wrap:wrap;gap:6px;min-height:22px;}
+  .slm-token{font-size:10px;padding:3px 9px;border-radius:10px;font-weight:600;}
+  .tok-genre{background:rgba(230,57,70,0.2);color:#ff7b84;border:1px solid rgba(230,57,70,0.3);}
+  .tok-year{background:rgba(67,97,238,0.2);color:#7b9eff;border:1px solid rgba(67,97,238,0.3);}
+  .tok-lang{background:rgba(1,180,228,0.2);color:var(--cyan);border:1px solid rgba(1,180,228,0.3);}
+  .tok-mood{background:rgba(6,214,160,0.2);color:var(--vert);border:1px solid rgba(6,214,160,0.3);}
+  .tok-person{background:rgba(245,197,24,0.2);color:var(--or);border:1px solid rgba(245,197,24,0.3);}
+  .tok-kw{background:rgba(123,47,255,0.2);color:#b57fff;border:1px solid rgba(123,47,255,0.3);}
+
+  /* résultats SLM */
+  .slm-results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .slm-results-title{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--violet);letter-spacing:1px;}
+  .slm-results-sub{font-size:11px;color:var(--muted);}
+  .slm-source-badge{font-size:10px;padding:3px 9px;border-radius:8px;font-weight:600;}
+  .src-pool{background:rgba(6,214,160,0.15);border:1px solid var(--vert);color:var(--vert);}
+  .src-tmdb{background:rgba(1,180,228,0.15);border:1px solid var(--cyan);color:var(--cyan);}
+  .slm-film-card{display:flex;gap:14px;background:var(--charbon);border:1px solid var(--bordure);border-radius:10px;padding:14px;transition:border-color 0.2s;animation:slideIn 0.35s ease both;}
+  .slm-film-card:hover{border-color:var(--violet);}
+  .slm-poster{width:70px;height:100px;object-fit:cover;border-radius:6px;flex-shrink:0;}
+  .slm-poster-ph{width:70px;height:100px;background:var(--panneau);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--bordure);flex-shrink:0;}
+  .slm-film-info{flex:1;min-width:0;}
+  .slm-film-title{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .slm-film-meta{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+  .slm-film-synopsis{font-size:11px;color:var(--muted);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .slm-score-badge{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--or);text-align:right;flex-shrink:0;min-width:42px;}
+  .slm-match-bar{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--violet),var(--cyan));margin-top:6px;transition:width 0.5s;}
+  .slm-match-label{font-size:9px;color:var(--muted);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .slm-no-results{text-align:center;padding:28px;color:var(--muted);font-size:13px;}
+  .slm-films-list{display:flex;flex-direction:column;gap:10px;}
+  @media(max-width:750px){.slm-section{padding:0 14px 16px;}.slm-top{flex-wrap:wrap;}.slm-btn{width:100%;text-align:center;}}
+
+
+  /* GEMINI INPUT */
+  .gemini-row{display:flex;gap:10px;align-items:center;margin-bottom:14px;padding:12px 14px;background:rgba(255,213,0,0.06);border:1px solid rgba(255,213,0,0.25);border-radius:10px;}
+  .gemini-logo{font-size:18px;flex-shrink:0;}
+  .gemini-label{font-size:10px;color:var(--violet);font-weight:600;letter-spacing:1px;text-transform:uppercase;flex-shrink:0;}
+  /* Bulle d'analyse Ollama */
+  .gemini-thinking{display:none;margin-bottom:12px;padding:10px 14px;background:rgba(255,213,0,0.06);border:1px solid rgba(255,213,0,0.2);border-radius:8px;font-size:11px;color:#ffd700;font-family:'JetBrains Mono',monospace;line-height:1.7;}
+  .gemini-thinking.visible{display:block;}
+  .gemini-params{margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;}
+
+
+  /* TOAST + INDICATEURS PERF */
+  @keyframes toastIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+  .perf-badge{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);margin-left:8px;padding:2px 6px;background:var(--charbon);border-radius:4px;border:1px solid var(--bordure);}
+
+  /* FILM DU JOUR */
+  .fdj-section{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 40px 8px;}
+  .fdj-panel{background:linear-gradient(135deg,rgba(245,197,24,0.08) 0%,rgba(1,180,228,0.06) 100%);border:1px solid rgba(245,197,24,0.3);border-radius:14px;padding:20px 24px;margin-bottom:28px;display:grid;grid-template-columns:90px 1fr auto;gap:18px;align-items:center;}
+  .fdj-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--or);letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;}
+  .fdj-date{font-size:11px;color:var(--muted);margin-bottom:8px;}
+  .fdj-titre{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--texte);letter-spacing:1px;line-height:1.1;margin-bottom:4px;}
+  .fdj-meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;}
+  .fdj-synopsis{font-size:11px;color:var(--muted);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .fdj-poster{width:90px;height:130px;object-fit:cover;border-radius:8px;flex-shrink:0;}
+  .fdj-poster-placeholder{width:90px;height:130px;background:var(--charbon);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--bordure);}
+  .fdj-scores{text-align:right;min-width:70px;flex-shrink:0;}
+  .fdj-score-imdb{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--or);line-height:1;}
+  .fdj-score-tmdb{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--cyan);line-height:1;margin-top:4px;}
+  .fdj-loading{opacity:0.5;font-size:12px;color:var(--muted);font-style:italic;}
+  @media(max-width:750px){.fdj-section{padding:0 14px 8px;}.fdj-panel{grid-template-columns:70px 1fr;}.fdj-scores{display:none;}.fdj-poster{width:70px;height:100px;}}
+
+  @media(max-width:750px){
+    header{padding:22px 16px 16px;}main{padding:18px 14px 60px;}
+    .config-grid{grid-template-columns:1fr 1fr;}
+    .film-card{grid-template-columns:88px 1fr;}.film-poster{width:88px;}
+    .film-body{grid-template-columns:1fr;}.film-scores{text-align:left;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="logo">Ciné<span>Forest</span></div>
+    <div class="tagline">Random Forest × TMDB × OMDB</div>
+  </div>
+
+</header>
+<main>
+<div class="fdj-section">
+  <div class="fdj-panel" id="fdjPanel">
+    <div class="fdj-poster-placeholder" id="fdjPoster">🎬</div>
+    <div>
+      <div class="fdj-label">🎬 Film du Jour</div>
+      <div class="fdj-date" id="fdjDate">Chargement...</div>
+      <div class="fdj-titre" id="fdjTitre">—</div>
+      <div class="fdj-meta" id="fdjMeta"></div>
+      <div class="fdj-synopsis" id="fdjSynopsis"></div>
+    </div>
+    <div class="fdj-scores">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:1px;">TMDB</div>
+      <div class="fdj-score-tmdb" id="fdjTmdb">—</div>
+      <div style="font-size:9px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-top:6px;margin-bottom:1px;">IMDB</div>
+      <div class="fdj-score-imdb" id="fdjImdb">—</div>
+    </div>
+  </div>
+</div>
+<div class="config-panel">
+  <div class="config-grid" style="margin-bottom:22px;">
+    <div class="field">
+      <label>Période</label>
+      <select id="periode">
+        <option value="20s">Années 1920–30</option><option value="30-40">Années 1930–40</option>
+        <option value="40-50">Années 1940–50</option><option value="50-60">Années 1950–60</option>
+        <option value="60-70">Années 1960–70</option><option value="70-80">Années 1970–80</option>
+        <option value="80-90" selected>Années 1980–90</option><option value="90-00">Années 1990–2000</option>
+        <option value="00-10">Années 2000–2010</option>
+        <option value="10-20">Années 2010–2020</option>
+        <option value="20-30">Années 2020 et +</option>
+        <option value="all">Toutes périodes</option>
+      </select>
+    </div>
+    <div class="field"><label>Résultats</label><select id="nbResultats"><option value="3">Top 3</option><option value="5" selected>Top 5</option><option value="10">Top 10</option></select></div>
+  </div>
+  <div class="slider-wrap">
+    <div class="slider-header">
+      <span class="slider-label">Note minimale TMDB</span>
+      <span class="slider-value" id="sliderVal">5.0</span>
+    </div>
+    <input type="range" id="noteSlider" min="5" max="9" step="0.5" value="5" oninput="updateSlider(this.value)">
+    <div class="slider-ticks"><span>5.0</span><span>5.5</span><span>6.0</span><span>6.5</span><span>7.0</span><span>7.5</span><span>8.0</span><span>8.5</span><span>9.0</span></div>
+  </div>
+  <div class="field-group">
+    <div class="fg-label">
+      Genres
+      <span class="fg-hint">— clique pour sélectionner</span>
+      <button onclick="toggleAllGenres(true)" style="margin-left:auto;background:none;border:1px solid var(--bordure);color:var(--muted);padding:3px 8px;border-radius:6px;font-size:10px;cursor:pointer;">Tout</button>
+      <button onclick="toggleAllGenres(false)" style="background:none;border:1px solid var(--bordure);color:var(--muted);padding:3px 8px;border-radius:6px;font-size:10px;cursor:pointer;margin-left:4px;">Aucun</button>
+    </div>
+    <div class="chip-grid" id="genreGrid">
+      <label class="genre-chip"><input type="checkbox" value="28"> 💥 Action</label>
+      <label class="genre-chip"><input type="checkbox" value="12"> 🗺️ Aventure</label>
+      <label class="genre-chip"><input type="checkbox" value="16"> 🎨 Animation</label>
+      <label class="genre-chip"><input type="checkbox" value="35"> 😄 Comédie</label>
+      <label class="genre-chip"><input type="checkbox" value="80"> 🔫 Crime</label>
+      <label class="genre-chip"><input type="checkbox" value="99"> 📽️ Documentaire</label>
+      <label class="genre-chip"><input type="checkbox" value="18"> 🎭 Drame</label>
+      <label class="genre-chip"><input type="checkbox" value="10751"> 👨‍👩‍👧 Famille</label>
+      <label class="genre-chip"><input type="checkbox" value="14"> 🧙 Fantasy</label>
+      <label class="genre-chip"><input type="checkbox" value="36"> 📜 Histoire</label>
+      <label class="genre-chip"><input type="checkbox" value="27"> 👻 Horreur</label>
+      <label class="genre-chip"><input type="checkbox" value="10402"> 🎵 Musique</label>
+      <label class="genre-chip"><input type="checkbox" value="9648"> 🔍 Mystère</label>
+      <label class="genre-chip"><input type="checkbox" value="10749"> 💕 Romance</label>
+      <label class="genre-chip"><input type="checkbox" value="878"> 🚀 Sci-Fi</label>
+      <label class="genre-chip"><input type="checkbox" value="53"> 🔪 Thriller</label>
+      <label class="genre-chip"><input type="checkbox" value="10752"> ⚔️ Guerre</label>
+      <label class="genre-chip"><input type="checkbox" value="37"> 🤠 Western</label>
+    </div>
+  </div>
+  <div class="field-group">
+    <div class="fg-label">
+      Nationalité
+      <span id="langAutoBadge" class="lang-auto-badge hidden">🗣️ <span id="langAutoText"></span></span>
+    </div>
+    <div class="chip-grid" id="natGrid">
+      <label class="nat-chip active"><input type="radio" name="nat" value="all" data-lang="all" checked> 🌍 Toutes</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="US" data-lang="en"> 🇺🇸 USA</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="GB" data-lang="en"> 🇬🇧 UK</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="FR" data-lang="fr"> 🇫🇷 France</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="IT" data-lang="it"> 🇮🇹 Italie</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="DE" data-lang="de"> 🇩🇪 Allemagne</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="JP" data-lang="ja"> 🇯🇵 Japon</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="KR" data-lang="ko"> 🇰🇷 Corée</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="ES" data-lang="es"> 🇪🇸 Espagne</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="SE" data-lang="sv"> 🇸🇪 Suède</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="IN" data-lang="hi"> 🇮🇳 Inde</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="SU" data-lang="ru"> 🇷🇺 URSS/Russie</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="BR" data-lang="pt"> 🇧🇷 Brésil</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="CN" data-lang="zh"> 🇨🇳 Chine</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="TR" data-lang="tr"> 🇹🇷 Turquie</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="IR" data-lang="fa"> 🇮🇷 Iran</label>
+      <label class="nat-chip"><input type="radio" name="nat" value="XX" data-lang="random"> 🎲 Autre — langue surprise</label>
+    </div>
+  </div>
+  <div class="config-grid" style="margin-bottom:6px;">
+    <div class="field"><label>Tri par</label><select id="triMode"><option value="rf">Score Random Forest</option><option value="imdb">Note IMDB</option><option value="tmdb">Note TMDB</option><option value="votes">Popularité</option></select></div>
+    <div class="field">
+      <label>Nombre d'avis minimum</label>
+      <select id="minVotes">
+        <option value="0">Tous (0+)</option>
+        <option value="50000">&lt; 50k avis requis</option>
+        <option value="100000">&lt; 100k avis requis</option>
+        <option value="200000">&lt; 200k avis requis</option>
+        <option value="500000">&lt; 500k avis requis</option>
+        <option value="1000000">&lt; 1M avis requis</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn-run" id="btnRun" onclick="lancerAnalyse()">🎬 ANALYSER ET RECOMMANDER</button>
+  <div class="error-box" id="errorBox"></div>
+</div>
+
+<div id="progress-zone">
+  <div class="section-label">Analyse en cours</div>
+  <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
+  <div class="progress-log" id="progressLog"></div>
+</div>
+
+<div id="results-zone">
+  <div class="results-header">
+    <div class="results-title">Recommandations</div>
+    <div class="results-sub" id="resultsSubtitle"></div>
+  </div>
+  <div class="films-list" id="filmsList"></div>
+  <div class="rf-panel">
+    <div class="section-label">Importance des paramètres — Random Forest</div>
+    <div class="importance-bars" id="importanceBars"></div>
+  </div>
+</div>
+<div class="slm-section">
+  <div class="slm-panel">
+    <div class="section-label">🧠 Recherche intelligente — Ollama × TMDB</div>
+
+    <!-- Statut connexion serveur Ollama -->
+    <div class="gemini-row" id="slmStatusRow">
+      <span class="gemini-logo">🧠</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;font-weight:600;color:var(--violet);letter-spacing:1px;text-transform:uppercase;margin-bottom:3px;">Serveur distant</div>
+        <div id="slmStatus" style="font-size:11px;color:var(--muted);">Non testé — clique sur "Vérifier la connexion"</div>
+      </div>
+      <button id="slmLoadBtn" onclick="verifierConnexionOllama()" style="flex-shrink:0;background:var(--violet);border:none;border-radius:8px;color:#fff;padding:10px 18px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;cursor:pointer;transition:all 0.2s;white-space:nowrap;">🔌 VÉRIFIER LA CONNEXION</button>
+    </div>
+
+    <!-- Suggestions rapides -->
+    <div class="slm-suggestions">
+      <span class="slm-sugg" onclick="slmFill('thriller psychologique sombre des années 90')">🔪 thriller psychologique 90s</span>
+      <span class="slm-sugg" onclick="slmFill('film noir avec un détective et de la pluie')">🕵️ film noir détective</span>
+      <span class="slm-sugg" onclick="slmFill('comédie romantique française légère')">💕 comédie romantique FR</span>
+      <span class="slm-sugg" onclick="slmFill('science-fiction japonaise futuriste et philosophique')">🚀 sci-fi japonaise</span>
+      <span class="slm-sugg" onclick="slmFill('film de guerre triste et émouvant sur des soldats')">⚔️ guerre émouvant</span>
+      <span class="slm-sugg" onclick="slmFill('horreur années 80 avec un monstre et du sang')">👻 horreur 80s</span>
+      <span class="slm-sugg" onclick="slmFill('drame familial coréen contemporain')">🎭 drame coréen</span>
+      <span class="slm-sugg" onclick="slmFill('western spaghetti avec Clint Eastwood dans le désert')">🤠 western Eastwood</span>
+      <span class="slm-sugg" onclick="slmFill('Kubrick film psychologique énigmatique')">🎬 Kubrick</span>
+      <span class="slm-sugg" onclick="slmFill('aventure épique avec des effets spéciaux spectaculaires')">🌟 aventure épique</span>
+    </div>
+
+    <!-- Barre de recherche -->
+    <div class="slm-top">
+      <div class="slm-input-wrap">
+        <input type="text" id="slmInput" class="slm-input"
+          placeholder="Décris le film que tu cherches en langage naturel..."
+          onkeydown="if(event.key==='Enter') lancerSLM()">
+        <button class="slm-clear" onclick="slmClear()" title="Effacer">✕</button>
+      </div>
+      <button class="slm-btn" id="slmBtn" onclick="lancerSLM()">🔍 CHERCHER</button>
+    </div>
+
+    <!-- Ce que Ollama a compris -->
+    <div class="gemini-thinking" id="geminiThinking">
+      <strong>✨ Ollama a compris :</strong>
+      <div class="gemini-params" id="geminiParams"></div>
+    </div>
+
+    <!-- Résultats -->
+    <div id="slmResults" style="margin-top:16px;display:none;">
+      <div class="slm-results-header">
+        <span class="slm-results-title">Résultats</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="slmSourceBadge" class="slm-source-badge src-tmdb">Ollama × TMDB</span>
+          <span class="slm-results-sub" id="slmResultsSub"></span>
+        </div>
+      </div>
+      <div class="slm-films-list" id="slmFilmsList"></div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+
+// ── CLÉS API ─────────────────────────────────────────────────────
+// Les clés TMDB et OMDb ne sont plus dans le navigateur : server.js les ajoute
+// lui-même en relayant /api/tmdb/* et /api/omdb (elles vivent dans le fichier .env).
+// Ces constantes servent seulement de marqueurs « API disponible » pour le reste du code.
+const TMDB_API_KEY = 'proxy';
+const OMDB_API_KEY = 'proxy';
+
+// Fonction de lecture des clés — retourne la constante intégrée
+// ou une valeur depuis un éventuel champ caché (compatibilité)
+function getCle(id) {
+  if (id === 'tmdbKey') return TMDB_API_KEY;
+  if (id === 'omdbKey') return OMDB_API_KEY;
+  return '';
+}
+// ── MAPPINGS ──────────────────────────────────────────────────────
+const LANG_LABELS = {en:'Anglais',fr:'Français',it:'Italien',de:'Allemand',ja:'Japonais',ko:'Coréen',es:'Espagnol',sv:'Suédois',hi:'Hindi',ru:'Russe',pt:'Portugais',da:'Danois',zh:'Chinois',
+  // Langues "surprise" — peu représentées, hors des chips classiques
+  pl:'Polonais', tr:'Turc', th:'Thaïlandais', el:'Grec', he:'Hébreu', fa:'Persan',
+  ar:'Arabe', nl:'Néerlandais', fi:'Finnois', no:'Norvégien', cs:'Tchèque',
+  hu:'Hongrois', ro:'Roumain', id:'Indonésien', vi:'Vietnamien', uk:'Ukrainien',
+  is:'Islandais', sr:'Serbe', bn:'Bengali', ta:'Tamoul'};
+
+// Langues utilisées pour le tirage "Autre — surprise" (volontairement hors des
+// nationalités déjà proposées dans les chips classiques)
+const LANGUES_SURPRISE = ['pl','th','el','he','ar','nl','fi','no','cs','hu','ro','id','vi','uk','is','sr','bn','ta'];
+const GENRE_NAMES = {28:"Action",12:"Aventure",16:"Animation",35:"Comédie",80:"Crime",99:"Documentaire",18:"Drame",10751:"Famille",14:"Fantasy",36:"Histoire",27:"Horreur",10402:"Musique",9648:"Mystère",10749:"Romance",878:"Sci-Fi",10770:"TV Movie",53:"Thriller",10752:"Guerre",37:"Western"};
+
+// ── ÉTAT GLOBAL ───────────────────────────────────────────────────
+let TIRAGE_COUNT   = 0;
+let POOL_GLOBAL    = [];   // tous les films qualifiés enrichis (vivier complet)
+let AFFICHES_IDS   = new Set(); // IDs des films actuellement affichés
+let VUS_IDS        = new Set(); // IDs marqués "déjà vu" — exclus des prochains remplacements
+let CURRENT_TOP    = [];   // liste affichée actuelle
+let CURRENT_RF     = null;
+let CURRENT_PARAMS = {};   // pour "déjà vu" : on connaît les params en cours
+
+// ── SLIDER ────────────────────────────────────────────────────────
+function updateSlider(val) {
+  document.getElementById('sliderVal').textContent = parseFloat(val).toFixed(1);
+  const pct = ((val - 5) / 4) * 100;
+  document.getElementById('noteSlider').style.setProperty('--pct', pct + '%');
+}
+updateSlider(5);
+
+// ── GENRE CHIPS ───────────────────────────────────────────────────
+document.querySelectorAll('.genre-chip input[type="checkbox"]').forEach(input => {
+  input.addEventListener('change', () => input.closest('.genre-chip').classList.toggle('active', input.checked));
+});
+function toggleAllGenres(actif) {
+  document.querySelectorAll('.genre-chip input[type="checkbox"]').forEach(input => {
+    input.checked = actif;
+    input.closest('.genre-chip').classList.toggle('active', actif);
+  });
+}
+
+// ── NAT CHIPS ─────────────────────────────────────────────────────
+document.querySelectorAll('.nat-chip input[type="radio"]').forEach(input => {
+  input.addEventListener('change', () => {
+    document.querySelectorAll('.nat-chip').forEach(x => x.classList.remove('active'));
+    input.closest('.nat-chip').classList.add('active');
+    const lang = input.dataset.lang;
+    const badge = document.getElementById('langAutoBadge');
+    if (lang === 'random') {
+      // Tirage aléatoire d'une langue "surprise" à chaque sélection du chip
+      const tirage = LANGUES_SURPRISE[Math.floor(Math.random() * LANGUES_SURPRISE.length)];
+      input.dataset.resolvedLang = tirage; // langue effectivement utilisée pour la recherche
+      document.getElementById('langAutoText').textContent = '🎲 Langue surprise tirée : ' + (LANG_LABELS[tirage] || tirage.toUpperCase());
+      badge.classList.remove('hidden');
+    } else if (lang && lang !== 'all') {
+      delete input.dataset.resolvedLang;
+      document.getElementById('langAutoText').textContent = 'Langue auto : ' + (LANG_LABELS[lang] || lang.toUpperCase());
+      badge.classList.remove('hidden');
+    } else {
+      delete input.dataset.resolvedLang;
+      badge.classList.add('hidden');
+    }
+  });
+});
+
+// ── UTILS ─────────────────────────────────────────────────────────
+function log(msg){const el=document.getElementById('progressLog');el.innerHTML+=`<div>› ${msg}</div>`;el.scrollTop=el.scrollHeight;}
+function setProgress(p){document.getElementById('progressBar').style.width=p+'%';}
+function showError(m){const e=document.getElementById('errorBox');e.style.display='block';e.textContent='⚠️ '+m;}
+function hideError(){document.getElementById('errorBox').style.display='none';}
+function stars(n){const s=Math.round(n/2);return '★'.repeat(Math.max(0,s))+'☆'.repeat(Math.max(0,5-s));}
+
+function makeLCG(seed) {
+  let s = (seed >>> 0) || 1;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 0xFFFFFFFF; };
+}
+
+// ── RANDOM FOREST ─────────────────────────────────────────────────
+class DecisionTree {
+  constructor(seed) { this.rngState = seed >>> 0; }
+  rng() { this.rngState = (Math.imul(this.rngState, 1664525) + 1013904223) >>> 0; return this.rngState / 0xFFFFFFFF; }
+  scoreStable(f) {
+    let s = 0;
+    s += (f.tmdbNote  || 0) * 9;
+    s += (f.imdbNote  || 0) * 8;
+    s += Math.min((f.votes || 0) / 80000, 10) * 2.5;
+    s += (f.genreScore   || 0) * 10;
+    s += (f.periodeScore || 0) * 6;
+    s += (f.langScore    || 0) * 5;
+    s += Math.min((f.dureeMin || 0) / 12, 10) * 0.8;
+    s += this.rng() * 1.5;
+    return s;
+  }
+}
+
+class RandomForest {
+  constructor(n = 80) {
+    this.trees = Array.from({length: n}, (_, i) => new DecisionTree(42 + i * 1337));
+    this.featureNames = ["Note TMDB","Note IMDB","Votes","Genre","Période","Langue","Réalisateur","Durée"];
+    this.importances  = [0.26, 0.22, 0.16, 0.14, 0.08, 0.07, 0.04, 0.03];
+  }
+
+  predict(films, genreIds, periodeKey, langCible) {
+    const decMap = {'20s':[1920,1929],'30-40':[1930,1939],'40-50':[1940,1949],
+      '50-60':[1950,1959],'60-70':[1960,1969],'70-80':[1970,1979],
+      '80-90':[1980,1989],'90-00':[1990,1999],'00-10':[2000,2009],'10-20':[2010,2019],
+      '20-30':[2020,2030]};
+    const [pMin, pMax] = periodeKey === 'all' ? [1900, 2030] : (decMap[periodeKey] || [1900, 2030]);
+    return films.map(f => {
+      const genreScore   = f.genre_ids?.some(g => genreIds.includes(String(g))) ? 1 : 0.3;
+      const periodeScore = (f.annee >= pMin && f.annee <= pMax) ? 1 : 0.2;
+      const langScore    = (langCible && langCible !== 'all' && f.langue === langCible) ? 1 : (langCible === 'all' ? 0.5 : 0);
+      const enriched = {...f, genreScore, periodeScore, langScore};
+      const rfScore  = this.trees.map(t => t.scoreStable(enriched)).reduce((a,b)=>a+b,0) / this.trees.length;
+      return {...enriched, rfScore};
+    });
+  }
+
+  // ── SÉLECTION 20% FIXE / 80% VARIABLE ─────────────────────────
+  // 20% fixe  = le meilleur film absolu (ou les 2 premiers si Top 10)
+  //             → l'élite, toujours présente
+  // 80% variable = tirés aléatoirement dans le vivier trié par score
+  //                en excluant les films déjà vus (VUS_IDS)
+  //                seed = tirageIndex → différent à chaque clic
+
+  selectDiverse(scored, nbRes, tirageIndex, exclus = new Set()) {
+    // Trier par score stable décroissant
+    const sorted = [...scored].sort((a,b) => b.rfScore - a.rfScore);
+
+    // 20% fixes = max(1, floor(nbRes*0.2))
+    const nbFixe = Math.max(1, Math.floor(nbRes * 0.2));
+    const nbVar  = nbRes - nbFixe;
+
+    // Les films fixes : les nbFixe meilleurs non exclus
+    const fixes = sorted.filter(f => !exclus.has(f.id)).slice(0, nbFixe).map(f => ({...f, _slot:'fixed'}));
+
+    // Vivier variable : tout ce qui n'est pas dans les fixes ni exclu
+    const fixeIds = new Set(fixes.map(f => f.id));
+    const vivier  = sorted.filter(f => !fixeIds.has(f.id) && !exclus.has(f.id));
+
+    // Mélange déterministe par seed de tirage
+    const rng     = makeLCG(tirageIndex * 99991 + 31337);
+    const melange = [...vivier].sort(() => rng() - 0.5);
+    const variables = melange.slice(0, nbVar).map(f => ({...f, _slot:'rotating'}));
+
+    return [...fixes, ...variables].sort((a,b) => b.rfScore - a.rfScore);
+  }
+}
+
+// ── API ───────────────────────────────────────────────────────────
+async function tmdbDiscover(tmdbKey, genreIds, yearMin, yearMax, page, region, lang, minVotes=150) {
+  let url = `/api/tmdb/discover/movie?`
+    + `&sort_by=vote_average.desc`
+    + `&primary_release_date.gte=${yearMin}-01-01`
+    + `&primary_release_date.lte=${yearMax}-12-31&page=${page}`;
+  if (minVotes) url += `&vote_count.gte=${minVotes}`;
+  if (genreIds.length) url += `&with_genres=${genreIds.join('|')}`;
+  if (region && region !== 'all' && region !== 'SU' && region !== 'XX') url += `&with_origin_country=${region}`;
+  // Pour TR et IR, TMDB utilise le pays ET la langue pour fiabilité
+  if (region === 'IR') url += `&with_origin_country=IR`;
+  if (lang && lang !== 'all') url += `&with_original_language=${lang}`;
+  const r = await fetchWithTimeout(url); const d = await r.json(); return d.results || [];
+}
+
+async function tmdbDetails(tmdbKey, id, langCible) {
+  const langParam = langCible && langCible !== 'all' ? `${langCible}-${langCible.toUpperCase()}` : 'fr-FR';
+  const r = await fetch(`/api/tmdb/movie/${id}?&append_to_response=credits,videos&language=${langParam}`);
+  return await r.json();
+}
+
+async function omdbRatings(omdbKey, titre, annee) {
+  try {
+    const r = await fetch(`/api/omdb?t=${encodeURIComponent(titre)}&y=${annee}&type=movie`);
+    const d = await r.json();
+    if (d.Response !== 'True') return null;
+    const rt = d.Ratings?.find(x => x.Source === 'Rotten Tomatoes');
+    return {imdbNote:parseFloat(d.imdbRating)||null, imdbVotes:parseInt((d.imdbVotes||'0').replace(/,/g,''))||0, rottenTomatoes:rt?.Value||null};
+  } catch { return null; }
+}
+
+async function enrichirFilm(film, tmdbKey, omdbKey, langCible) {
+  try {
+    const det = await tmdbDetails(tmdbKey, film.id, langCible);
+    film.dureeMin    = det.runtime || 0;
+    film.genres      = det.genres?.map(g => g.name).join(', ') || '';
+    film.nationalite = det.production_countries?.map(c => c.iso_3166_1).join(', ') || '';
+    film.titreFR     = det.title || film.titre;
+    film.synopsis    = det.overview || film.synopsis;
+    film.realisateur = det.credits?.crew?.find(c => c.job === 'Director')?.name || 'N/A';
+    film.acteurs     = (det.credits?.cast || []).slice(0,5).map(a => a.name);
+    const tr = det.videos?.results?.find(v => v.type==='Trailer' && v.site==='YouTube');
+    film.trailer = tr ? `https://www.youtube.com/watch?v=${tr.key}` : null;
+  } catch(e) {}
+  if (omdbKey) {
+    const rat = await omdbRatings(omdbKey, film.titre, film.annee);
+    if (rat) { film.imdbNote=rat.imdbNote; film.imdbVotes=rat.imdbVotes; film.rottenTomatoes=rat.rottenTomatoes; }
+  }
+  return film;
+}
+
+// ── ANALYSE PRINCIPALE ────────────────────────────────────────────
+async function lancerAnalyse() {
+  hideError();
+  TIRAGE_COUNT++;
+  VUS_IDS.clear(); // reset des "déjà vu" à chaque nouvelle analyse
+
+  const tmdbKey    = TMDB_API_KEY;
+  const omdbKey    = OMDB_API_KEY;
+  const periode    = document.getElementById('periode').value;
+  const noteMin    = parseFloat(document.getElementById('noteSlider').value);
+  const nbRes      = parseInt(document.getElementById('nbResultats').value);
+  const triMode    = document.getElementById('triMode').value;
+  const minVotes   = parseInt(document.getElementById('minVotes').value) || 0;
+  const natInput   = document.querySelector('input[name="nat"]:checked');
+  const natChoisie = natInput?.value || 'all';
+  // Si "Autre — surprise" est sélectionné, on tire une NOUVELLE langue
+  // aléatoire à CHAQUE lancement (pas seulement au clic sur le chip),
+  // pour que relancer l'analyse propose une langue différente.
+  let langCible;
+  if (natInput?.dataset.lang === 'random') {
+    langCible = LANGUES_SURPRISE[Math.floor(Math.random() * LANGUES_SURPRISE.length)];
+    natInput.dataset.resolvedLang = langCible;
+    const badge = document.getElementById('langAutoBadge');
+    document.getElementById('langAutoText').textContent = '🎲 Langue surprise tirée : ' + (LANG_LABELS[langCible] || langCible.toUpperCase());
+    badge.classList.remove('hidden');
+  } else {
+    langCible = natInput?.dataset.lang || 'all';
+  }
+  const genreIds   = [...document.querySelectorAll('.genre-chip.active input')].map(i => i.value);
+
+  if (!validerAvantLancement()) { TIRAGE_COUNT--; return; }
+  const tmdbCheck = TMDB_API_KEY;
+  if (!tmdbCheck) { TIRAGE_COUNT--; return; }
+
+  const decMap = {'20s':[1920,1929],'30-40':[1930,1939],'40-50':[1940,1949],
+    '50-60':[1950,1959],'60-70':[1960,1969],'70-80':[1970,1979],
+    '80-90':[1980,1989],'90-00':[1990,1999],'00-10':[2000,2009],'10-20':[2010,2019],
+    '20-30':[2020,2030]};
+  const [yearMin, yearMax] = periode === 'all' ? [1920, 2030] : (decMap[periode] || [1920, 2030]);
+
+  // Sauvegarder les params courants pour "déjà vu"
+  CURRENT_PARAMS = {tmdbKey, omdbKey, periode, noteMin, nbRes, triMode, natChoisie, langCible, genreIds, yearMin, yearMax};
+
+  perf.start('analyse');
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('results-zone').style.display = 'none';
+  document.getElementById('progress-zone').style.display = 'block';
+  document.getElementById('progressLog').innerHTML = '';
+  document.getElementById('filmsList').innerHTML = '';
+  setProgress(0);
+
+  log(`🎲 Tirage #${TIRAGE_COUNT} — 20% fixe + 80% variable`);
+  log(`📅 ${yearMin}–${yearMax} · ⭐ ≥${noteMin.toFixed(1)}${langCible!=='all'?' · 🗣️ '+LANG_LABELS[langCible]:''}`);
+
+  // ÉTAPE 1 : Discover TMDB
+  log(`\n🔍 Recherche TMDB...`);
+  let tousFilms = [];
+  for (let page = 1; page <= 5; page++) {
+    try {
+      const res = await tmdbDiscover(tmdbKey, genreIds, yearMin, yearMax, page, natChoisie, langCible, minVotes);
+      tousFilms.push(...res);
+    } catch(e) {}
+    setProgress(4 + page * 8);
+    await new Promise(r => setTimeout(r, 100));
+  }
+  tousFilms = tousFilms.filter((f,i,arr) => arr.findIndex(x => x.id===f.id)===i);
+  let filmsValides = tousFilms.filter(f => (f.vote_average||0) >= noteMin);
+  if (langCible !== 'all') filmsValides = filmsValides.filter(f => f.original_language===langCible);
+  log(`✅ ${filmsValides.length} films qualifiés sur ${tousFilms.length}`);
+  setProgress(45);
+
+  if (!filmsValides.length) {
+    showError(`Aucun film trouvé. Essaie une note plus basse ou d'autres critères.`);
+    document.getElementById('btnRun').disabled=false;
+    document.getElementById('progress-zone').style.display='none';
+    TIRAGE_COUNT--; return;
+  }
+
+  // ÉTAPE 2 : RF scoring initial
+  const rf = new RandomForest(80);
+  CURRENT_RF = rf;
+  const filmsNorm = filmsValides.map(f => ({
+    id:f.id, titre:f.title, titreFR:f.title,
+    annee:f.release_date ? parseInt(f.release_date.substring(0,4)) : 0,
+    tmdbNote:f.vote_average||0, votes:f.vote_count||0, genre_ids:f.genre_ids||[],
+    poster:f.poster_path?`https://image.tmdb.org/t/p/w342${f.poster_path}`:null,
+    synopsis:f.overview||'', langue:f.original_language||'',
+    dureeMin:0, imdbNote:null, imdbVotes:0, rottenTomatoes:null,
+    realisateur:'', acteurs:[], trailer:null, genres:'', nationalite:''
+  }));
+
+  const scored = rf.predict(filmsNorm, genreIds, periode, langCible);
+  scored.sort((a,b) => b.rfScore - a.rfScore);
+
+  // Pool large pour avoir un vivier suffisant pour les remplacements "déjà vu"
+  const poolSize = Math.min(Math.max(nbRes * 10, 50), scored.length);
+  const pool = scored.slice(0, poolSize);
+  setProgress(50);
+
+  // ÉTAPE 3 : Enrichir tout le pool
+  log(`\n🎬 Enrichissement du pool (${pool.length} films)...`);
+  for (let i = 0; i < pool.length; i++) {
+    pool[i] = await enrichirFilm(pool[i], tmdbKey, omdbKey, langCible);
+    if (i < 10) log(`  ✅ ${pool[i].titreFR} (${pool[i].annee})`);
+    else if (i === 10) log(`  ... (${pool.length - 10} autres en cours)`);
+    setProgress(50 + Math.round(((i+1)/pool.length)*44));
+    await new Promise(r => setTimeout(r, 80));
+  }
+
+  // Re-scorer avec données enrichies
+  POOL_GLOBAL = rf.predict(pool, genreIds, periode, langCible);
+  POOL_GLOBAL.sort((a,b) => b.rfScore - a.rfScore);
+
+  // ÉTAPE 4 : Sélection finale 20/80
+  log(`\n🏆 Sélection 20% fixe / 80% variable...`);
+  let topFinal = rf.selectDiverse(POOL_GLOBAL, nbRes, TIRAGE_COUNT, VUS_IDS);
+
+  // Tri alternatif si demandé
+  if (triMode !== 'rf') {
+    topFinal.sort((a,b) => {
+      if (triMode==='imdb') return (b.imdbNote||0)-(a.imdbNote||0);
+      if (triMode==='tmdb') return (b.tmdbNote||0)-(a.tmdbNote||0);
+      if (triMode==='votes') return (b.votes||0)-(a.votes||0);
+      return 0;
+    });
+  }
+
+  CURRENT_TOP = topFinal;
+  AFFICHES_IDS = new Set(topFinal.map(f => f.id));
+
+  setProgress(100);
+  await new Promise(r => setTimeout(r, 300));
+
+  afficherResultats(topFinal, rf, tousFilms.length, filmsValides.length, natChoisie, langCible, noteMin);
+  document.getElementById('progress-zone').style.display='none';
+  document.getElementById('results-zone').style.display='block';
+  document.getElementById('btnRun').disabled=false;
+}
+
+// ── DÉJÀ VU : remplacer un film à la volée ────────────────────────
+async function dejaVu(filmId) {
+  const btn = document.querySelector(`[data-seen-id="${filmId}"]`);
+  if (!btn) return;
+
+  // Marquer comme vu et désactiver le bouton
+  VUS_IDS.add(filmId);
+  btn.innerHTML = `<span class="spinner"></span> Recherche...`;
+  btn.classList.add('loading');
+
+  // Trouver le prochain film disponible dans le pool
+  // (ni affiché, ni déjà vu)
+  const exclus = new Set([...AFFICHES_IDS, ...VUS_IDS]);
+  const candidats = POOL_GLOBAL.filter(f => !exclus.has(f.id));
+
+  if (!candidats.length) {
+    btn.innerHTML = '😔 Plus de films disponibles';
+    btn.classList.remove('loading');
+    return;
+  }
+
+  // Choisir le meilleur candidat (le premier du pool après exclusion)
+  const newFilm = {...candidats[0], _slot:'rotating'};
+
+  // Enrichir si nécessaire (si pas encore fait)
+  if (!newFilm.realisateur) {
+    const {tmdbKey, omdbKey, langCible} = CURRENT_PARAMS;
+    await enrichirFilm(newFilm, tmdbKey, omdbKey, langCible);
+  }
+
+  // Animer la sortie de l'ancien film
+  const oldCard = document.querySelector(`[data-film-id="${filmId}"]`);
+  if (oldCard) {
+    oldCard.classList.add('replacing');
+    await new Promise(r => setTimeout(r, 250));
+  }
+
+  // Mettre à jour la liste
+  AFFICHES_IDS.delete(filmId);
+  AFFICHES_IDS.add(newFilm.id);
+  const idx = CURRENT_TOP.findIndex(f => f.id === filmId);
+  if (idx !== -1) CURRENT_TOP[idx] = newFilm;
+
+  // Re-render la carte
+  if (oldCard) {
+    const wrapper = oldCard.parentElement;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = filmCardHTML(newFilm, idx);
+    const newCard = tempDiv.firstElementChild;
+    newCard.style.animationDelay = '0s';
+    wrapper.replaceChild(newCard, oldCard);
+  }
+}
+
+// ── HTML D'UNE CARTE FILM ─────────────────────────────────────────
+function filmCardHTML(f, rank) {
+  const genreLabel = f.genres || f.genre_ids?.map(g=>GENRE_NAMES[g]||'').filter(Boolean).join(', ') || '';
+  const langCode   = (f.langue||'').toUpperCase();
+  const langFull   = LANG_LABELS[f.langue] || langCode;
+  const isFixed    = f._slot === 'fixed';
+
+  const posterHTML = f.poster
+    ? `<img src="${f.poster}" alt="${f.titreFR}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-poster>🎬</div>'">`
+    : `<div class="no-poster">🎬</div>`;
+
+  const castHTML = f.acteurs?.length
+    ? `<div class="cast-list">${f.acteurs.map(a=>`<span class="cast-chip">${a}</span>`).join('')}</div>` : '';
+
+  const imdbHTML = f.imdbNote
+    ? `<div class="score-block"><div class="score-label">IMDB</div><div class="score-imdb">${f.imdbNote}</div><div class="stars">${stars(f.imdbNote)}</div></div>` : '';
+
+  const rtHTML = f.rottenTomatoes
+    ? `<div class="score-block"><div class="score-label">Rotten Tomatoes</div><div class="score-rt">${f.rottenTomatoes}</div></div>` : '';
+
+  return `
+  <div class="film-card new-entry" data-film-id="${f.id}" style="animation-delay:${rank*0.08}s">
+    <div class="film-poster">
+      ${posterHTML}
+      <div class="film-rank-badge">${rank+1}</div>
+      ${langCode ? `<div class="lang-badge">${langFull}</div>` : ''}
+      ${isFixed ? `<div class="fixed-badge">⭐ Fixe</div>` : ''}
+    </div>
+    <div class="film-body">
+      <div class="film-main">
+        <div class="film-title">${f.titreFR}</div>
+        <div class="film-meta">
+          <span class="tag tag-year">${f.annee}</span>
+          ${genreLabel ? `<span class="tag tag-genre">${genreLabel.split(',')[0].trim()}</span>` : ''}
+          ${f.nationalite ? `<span class="tag tag-pays">${f.nationalite.split(',')[0].trim()}</span>` : ''}
+          ${langCode ? `<span class="tag tag-lang">${langFull}</span>` : ''}
+          <span class="tag ${isFixed?'tag-fixed':'tag-rotating'}">${isFixed?'⭐ fixe':'🔀 variable'}</span>
+        </div>
+        <div class="film-details">
+          <strong>Réalisateur :</strong> ${f.realisateur||'N/A'}<br>
+          <strong>Durée :</strong> ${f.dureeMin ? f.dureeMin+' min' : 'N/A'}
+        </div>
+        ${f.synopsis ? `<div class="film-synopsis">${f.synopsis}</div>` : ''}
+        ${castHTML}
+        <div class="film-actions">
+          ${f.trailer ? `<a class="trailer-btn" href="${f.trailer}" target="_blank">▶ Bande-annonce</a>` : ''}
+          <button class="seen-btn" data-seen-id="${f.id}" onclick="dejaVu(${f.id})">👁️ Déjà vu — proposer un autre</button>
+        </div>
+      </div>
+      <div class="film-scores">
+        <div class="score-block"><div class="score-label">TMDB</div><div class="score-tmdb">${(f.tmdbNote||0).toFixed(1)}</div></div>
+        ${imdbHTML}
+        ${rtHTML}
+        <div class="rf-score">RF: ${f.rfScore.toFixed(1)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── AFFICHAGE ─────────────────────────────────────────────────────
+function afficherResultats(top, rf, total, valides, nat, lang, noteMin) {
+  const natLabel = nat==='all' ? 'Toutes nationalités' : (nat==='XX' ? '🎲 Nationalité surprise' : nat);
+  const langLabel = lang==='all' ? '' : ` · 🗣️ ${LANG_LABELS[lang]||lang}`;
+  const nbFixe = top.filter(f=>f._slot==='fixed').length;
+  const nbVar  = top.filter(f=>f._slot==='rotating').length;
+  document.getElementById('resultsSubtitle').textContent =
+    `${total} analysés · ${valides} qualifiés (≥${noteMin.toFixed(1)}) · ${top.length} recommandés · ${natLabel}${langLabel} · ⭐${nbFixe} fixe · 🔀${nbVar} variable`;
+
+  document.getElementById('filmsList').innerHTML = top.map((f,i) => filmCardHTML(f,i)).join('');
+
+  document.getElementById('importanceBars').innerHTML = rf.featureNames.map((name,i) => {
+    const pct=(rf.importances[i]*100).toFixed(1);
+    return `<div class="importance-row"><div class="imp-label">${name}</div><div class="imp-bar-wrap"><div class="imp-bar" data-width="${pct}" style="width:0%"></div></div><div class="imp-value">${pct}%</div></div>`;
+  }).join('');
+  setTimeout(()=>document.querySelectorAll('.imp-bar').forEach(b=>{b.style.width=b.dataset.width+'%';}),300);
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// SLM — Recherche sémantique propulsée par Ollama × TMDB
+// ════════════════════════════════════════════════════════════════════
+
+// Mapping genres TMDB (pour l'affichage)
+const GENRE_IDS = {
+  "Action":28,"Aventure":12,"Animation":16,"Comédie":35,"Crime":80,
+  "Documentaire":99,"Drame":18,"Famille":10751,"Fantasy":14,"Histoire":36,
+  "Horreur":27,"Musique":10402,"Mystère":9648,"Romance":10749,
+  "Science-Fiction":878,"Thriller":53,"Guerre":10752,"Western":37,
+  "action":28,"adventure":12,"comedy":35,"crime":80,"documentary":99,
+  "drama":18,"fantasy":14,"history":36,"horror":27,"music":10402,
+  "mystery":9648,"romance":10749,"science fiction":878,"sci-fi":878,
+  "thriller":53,"war":10752,"western":37,"animation":16,"family":10751
+};
+
+// Prompt système envoyé au modèle pour extraire les paramètres de recherche
+const GEMINI_SYSTEM_PROMPT = `Tu es un assistant spécialisé en cinéma. 
+Analyse la requête utilisateur et retourne UNIQUEMENT un objet JSON valide (sans markdown, sans backticks) avec ces champs :
+
+{
+  "genres_tmdb": [],        // IDs TMDB : Action=28, Aventure=12, Animation=16, Comédie=35, Crime=80, Documentaire=99, Drame=18, Famille=10751, Fantasy=14, Histoire=36, Horreur=27, Musique=10402, Mystère=9648, Romance=10749, SciFi=878, Thriller=53, Guerre=10752, Western=37
+  "langue": "",             // code ISO 2 lettres : fr, en, ja, ko, it, de, es, tr, fa, ru, zh, hi, pt, sv... ou "" si non précisé
+  "annee_min": null,        // ex: 1980 ou null
+  "annee_max": null,        // ex: 1989 ou null  
+  "realisateur": "",        // nom du réalisateur si mentionné, sinon ""
+  "acteur": "",             // nom d'un acteur si mentionné, sinon ""
+  "mots_cles_en": [],       // 3-6 mots-clés en ANGLAIS pour la recherche TMDB
+  "tmdb_search_query": "",  // requête de recherche optimisée en anglais pour l'API TMDB
+  "explication": ""         // brève explication en français de ce que tu as compris (1 phrase)
+}
+
+Règles :
+- annee_min/annee_max : si "années 80" → 1980/1989, "années 90" → 1990/1999, "récent" → 2015/null
+- Pour les genres, inclure TOUS les genres pertinents détectés
+- tmdb_search_query doit être en anglais, concis et efficace pour l'API TMDB search
+- Ne retourne RIEN d'autre que le JSON pur`;
+
+function slmFill(texte) {
+  document.getElementById('slmInput').value = texte;
+}
+
+function slmClear() {
+  document.getElementById('slmInput').value = '';
+  document.getElementById('slmResults').style.display = 'none';
+  document.getElementById('geminiThinking').classList.remove('visible');
+  document.getElementById('geminiParams').innerHTML = '';
+}
+
+// ════════════════════════════════════════════════════════════════
+// SLM DISTANT — Ollama + Qwen, hébergé sur ton serveur
+// ════════════════════════════════════════════════════════════════
+
+// ⚠️ À ADAPTER selon ton serveur :
+const OLLAMA_URL   = '/api/ollama/chat';                  // relatif : passe par le proxy Node (server.js), pas de CORS
+const OLLAMA_MODEL = 'qwen2.5:14b';                       // doit correspondre exactement à un nom de `ollama list` — 'llama3.2:3b' pour une machine modeste
+
+let OLLAMA_READY = false;  // passe à true après un test de connexion réussi
+
+// Prompt système — version concise optimisée pour petits modèles
+const SLM_SYSTEM = `Tu es un parser cinéma. Réponds UNIQUEMENT avec un objet JSON, sans texte, sans backticks, sans explication.
+
+Exemple de réponse attendue :
+{"genres_tmdb":[53,18],"langue":"fr","annee_min":1980,"annee_max":1989,"realisateur":"","acteur":"","mots_cles_en":["thriller","dark","france"],"tmdb_search_query":"french thriller 1980s dark","explication":"Thriller français sombre des années 80"}
+
+Règles STRICTES :
+- genres_tmdb : tableau d'entiers uniquement. Action=28,Aventure=12,Animation=16,Comédie=35,Crime=80,Drame=18,Fantasy=14,Histoire=36,Horreur=27,Mystère=9648,Romance=10749,SciFi=878,Thriller=53,Guerre=10752,Western=37
+- langue : code ISO 2 lettres (fr,en,ja,ko,it,de,es,tr,fa,ru,zh,hi) ou chaîne vide ""
+- annee_min/annee_max : entier ou null (années 80 → 1980/1989, années 90 → 1990/1999)
+- tmdb_search_query : en anglais, optimisé pour l'API TMDB
+- Commence ta réponse directement par { et termine par }`;
+
+// ── VÉRIFICATION DE CONNEXION AU SERVEUR OLLAMA ───────────────────
+async function verifierConnexionOllama() {
+  const btn    = document.getElementById('slmLoadBtn');
+  const status = document.getElementById('slmStatus');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Test en cours...';
+  status.style.color = 'var(--cyan)';
+  status.textContent = `Connexion à ${OLLAMA_URL}...`;
+
+  try {
+    // On teste avec un tout petit message pour vérifier que le modèle répond
+    const r = await fetch(OLLAMA_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages: [{ role: 'user', content: 'ping' }],
+        stream: false
+      })
+    });
+
+    if (!r.ok) throw new Error(`HTTP ${r.status} — vérifie OLLAMA_URL / OLLAMA_MODEL`);
+    const data = await r.json();
+    if (!data.message) throw new Error("Réponse inattendue du serveur (pas de champ 'message')");
+
+    OLLAMA_READY = true;
+    status.innerHTML = `✅ <strong>${OLLAMA_MODEL}</strong> connecté sur ${OLLAMA_URL}`;
+    status.style.color = 'var(--vert)';
+    btn.textContent    = '✅ CONNECTÉ';
+    btn.style.background = 'rgba(6,214,160,0.15)';
+    btn.style.border     = '1px solid var(--vert)';
+    btn.style.color      = 'var(--vert)';
+    btn.style.cursor     = 'default';
+    btn.onclick          = null;
+
+  } catch(e) {
+    OLLAMA_READY = false;
+    status.innerHTML = `❌ Échec : ${e.message}`;
+    status.style.color = '#ff7b84';
+    btn.disabled = false;
+    btn.textContent = '🔄 Réessayer';
+    console.error('[Ollama]', e);
+  }
+}
+
+// ── INFÉRENCE : interroger le modèle via l'API Ollama ─────────────
+async function interrogerModele(query) {
+  const r = await fetch(OLLAMA_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      messages: [
+        { role: 'system', content: SLM_SYSTEM },
+        { role: 'user',   content: `Requête cinéma : "${query}"` }
+      ],
+      stream: false,
+      options: { temperature: 0.1, num_predict: 400 },
+      format: 'json'   // demande à Ollama de forcer un JSON valide en sortie
+    })
+  });
+
+  if (!r.ok) throw new Error(`Erreur serveur Ollama (HTTP ${r.status})`);
+  const data = await r.json();
+
+  let text = data.message?.content || '';
+  console.log('[SLM brut]', text);   // debug visible dans F12 → Console
+
+  // ── Nettoyage robuste de la réponse ─────────────────────────────
+  // 1. Retirer les blocs markdown ```json ... ``` ou ``` ... ```
+  text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+
+  // 2. Corriger les genres mal formatés du type "Guerre=10752"
+  //    Le modèle parfois retourne les valeurs comme labels au lieu d'entiers
+  const GENRE_MAP_STR = {
+    'Action':28,'Aventure':12,'Animation':16,'Comédie':35,'Crime':80,
+    'Documentaire':99,'Drame':18,'Famille':10751,'Fantasy':14,'Histoire':36,
+    'Horreur':27,'Musique':10402,'Mystère':9648,'Romance':10749,
+    'SciFi':878,'Sci-Fi':878,'Science-Fiction':878,'Thriller':53,
+    'Guerre':10752,'Western':37,
+    'action':28,'adventure':12,'comedy':35,'crime':80,'drama':18,
+    'fantasy':14,'history':36,'horror':27,'mystery':9648,'romance':10749,
+    'scifi':878,'thriller':53,'war':10752,'western':37,'animation':16
+  };
+
+  // 3. Extraire le JSON entre le premier { et le dernier }
+  const jsonStart = text.indexOf('{');
+  const jsonEnd   = text.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) {
+    // Tentative de reconstruction minimale si pas de JSON
+    console.warn('[SLM] Pas de JSON trouvé, reconstruction...');
+    return construireParamsSecours(query);
+  }
+
+  let jsonStr = text.substring(jsonStart, jsonEnd + 1).trim();
+
+  // 4. Corriger les valeurs genre mal formatées AVANT le parse
+  //    Ex: "Guerre=10752" → 10752  |  "Horreur" → 27
+  jsonStr = jsonStr.replace(/"([A-Za-zÀ-ÿ\-]+)=(\d+)"/g, (_, label, id) => id);
+  jsonStr = jsonStr.replace(/"([A-Za-zÀ-ÿ\-]+)"(\s*(?:,|\]))/g, (match, label, suffix) => {
+    const id = GENRE_MAP_STR[label];
+    return id !== undefined ? (id + suffix) : match;
+  });
+
+  // 5. Corriger les virgules en trop (trailing commas) — fréquent avec les petits modèles
+  jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+
+  // 6. Parser + valider la structure
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch(e) {
+    console.warn('[SLM] JSON invalide, secours...', e.message);
+    return construireParamsSecours(query);
+  }
+
+  // 7. Normaliser genres_tmdb : s'assurer que ce sont des entiers
+  if (Array.isArray(parsed.genres_tmdb)) {
+    parsed.genres_tmdb = parsed.genres_tmdb
+      .map(g => {
+        if (typeof g === 'number') return g;
+        if (typeof g === 'string') {
+          // "28", "Guerre=10752", "Horreur" → entier
+          const m = g.match(/(\d+)$/);
+          if (m) return parseInt(m[1]);
+          return GENRE_MAP_STR[g] || GENRE_MAP_STR[g.charAt(0).toUpperCase()+g.slice(1).toLowerCase()] || null;
+        }
+        return null;
+      })
+      .filter(g => g !== null && g > 0);
+  }
+
+  // 8. Valeurs par défaut pour les champs manquants
+  parsed.genres_tmdb  = parsed.genres_tmdb  || [];
+  parsed.langue       = parsed.langue        || '';
+  parsed.annee_min    = parsed.annee_min     || null;
+  parsed.annee_max    = parsed.annee_max     || null;
+  parsed.realisateur  = parsed.realisateur   || '';
+  parsed.acteur       = parsed.acteur        || '';
+  parsed.mots_cles_en = parsed.mots_cles_en  || [];
+  parsed.tmdb_search_query = parsed.tmdb_search_query || query;
+  parsed.explication  = parsed.explication   || '';
+
+  console.log('[SLM parsé]', parsed);
+  return parsed;
+}
+
+// ── SECOURS : analyse basique si le modèle ne retourne pas de JSON ──
+function construireParamsSecours(query) {
+  const q = query.toLowerCase();
+  const params = {
+    genres_tmdb: [], langue: '', annee_min: null, annee_max: null,
+    realisateur: '', acteur: '', mots_cles_en: query.split(' ').filter(w=>w.length>3).slice(0,5),
+    tmdb_search_query: query, explication: 'Analyse de secours (modèle non disponible)'
+  };
+
+  // Genres
+  if (q.includes('action'))         params.genres_tmdb.push(28);
+  if (q.includes('thriller'))       params.genres_tmdb.push(53);
+  if (q.includes('horreur')||q.includes('horror')) params.genres_tmdb.push(27);
+  if (q.includes('science')||q.includes('sci-fi')) params.genres_tmdb.push(878);
+  if (q.includes('guerre')||q.includes('war'))     params.genres_tmdb.push(10752);
+  if (q.includes('drame')||q.includes('drama'))    params.genres_tmdb.push(18);
+  if (q.includes('com')||q.includes('humour'))     params.genres_tmdb.push(35);
+  if (q.includes('western'))        params.genres_tmdb.push(37);
+  if (q.includes('crime')||q.includes('polar'))    params.genres_tmdb.push(80);
+  if (q.includes('roman'))          params.genres_tmdb.push(10749);
+
+  // Langues
+  if (q.includes('fran'))  params.langue = 'fr';
+  if (q.includes('japon')) params.langue = 'ja';
+  if (q.includes('cor'))   params.langue = 'ko';
+  if (q.includes('ital'))  params.langue = 'it';
+  if (q.includes('allem')) params.langue = 'de';
+  if (q.includes('espag')) params.langue = 'es';
+
+  // Périodes
+  const m80 = q.match(/ann[eé]es?\s*(80|1980)/);
+  const m90 = q.match(/ann[eé]es?\s*(90|1990)/);
+  const m70 = q.match(/ann[eé]es?\s*(70|1970)/);
+  const m00 = q.match(/ann[eé]es?\s*(2000)/);
+  if (m80) { params.annee_min=1980; params.annee_max=1989; }
+  if (m90) { params.annee_min=1990; params.annee_max=1999; }
+  if (m70) { params.annee_min=1970; params.annee_max=1979; }
+  if (m00) { params.annee_min=2000; params.annee_max=2009; }
+
+  return params;
+}
+
+// ── HELPERS RECHERCHE ─────────────────────────────────────────────
+function slmFill(texte) {
+  document.getElementById('slmInput').value = texte;
+}
+
+function slmClear() {
+  document.getElementById('slmInput').value = '';
+  document.getElementById('slmResults').style.display = 'none';
+  document.getElementById('geminiThinking').classList.remove('visible');
+}
+
+// ── RECHERCHE TMDB AVEC PARAMS ────────────────────────────────────
+async function tmdbSearchAvecParams(tmdbKey, params) {
+  const films = [];
+
+  if (params.tmdb_search_query) {
+    try {
+      const r = await fetch(`/api/tmdb/search/movie?&query=${encodeURIComponent(params.tmdb_search_query)}&language=fr-FR&include_adult=false`);
+      const d = await r.json();
+      films.push(...(d.results || []));
+    } catch(e) {}
+  }
+
+  if (params.realisateur || params.acteur) {
+    const nom = params.realisateur || params.acteur;
+    try {
+      const pr = await fetch(`/api/tmdb/search/person?&query=${encodeURIComponent(nom)}&language=fr-FR`);
+      const pd = await pr.json();
+      const person = pd.results?.[0];
+      if (person) {
+        const cr = await fetch(`/api/tmdb/person/${person.id}/movie_credits?&language=fr-FR`);
+        const cd = await cr.json();
+        const fp = params.realisateur ? (cd.crew||[]).filter(f=>f.job==='Director') : (cd.cast||[]);
+        films.push(...fp.slice(0,15));
+      }
+    } catch(e) {}
+  }
+
+  let discUrl = `/api/tmdb/discover/movie?&sort_by=vote_average.desc&vote_count.gte=100&language=fr-FR`;
+  if (params.genres_tmdb?.length) discUrl += `&with_genres=${params.genres_tmdb.join('|')}`;
+  if (params.langue)               discUrl += `&with_original_language=${params.langue}`;
+  if (params.annee_min)            discUrl += `&primary_release_date.gte=${params.annee_min}-01-01`;
+  if (params.annee_max)            discUrl += `&primary_release_date.lte=${params.annee_max}-12-31`;
+  for (let p = 1; p <= 3; p++) {
+    try { const r=await fetch(discUrl+`&page=${p}`); const d=await r.json(); films.push(...(d.results||[])); } catch(e) {}
+  }
+
+  const seen = new Set();
+  return films.filter(f => { if(!f.id||seen.has(f.id)) return false; seen.add(f.id); return true; });
+}
+
+// ── SCORING ───────────────────────────────────────────────────────
+function scorerFilm(film, params) {
+  let score = 0;
+  score += (film.vote_average||0) * 8;
+  score += Math.min((film.vote_count||0)/10000, 10) * 2;
+  if (params.langue && film.original_language===params.langue) score += 40;
+  (params.genres_tmdb||[]).forEach(gid => { if((film.genre_ids||[]).includes(gid)) score += 25; });
+  const y = film.release_date ? parseInt(film.release_date.substring(0,4)) : 0;
+  if (params.annee_min && params.annee_max) {
+    if (y>=params.annee_min && y<=params.annee_max) score += 30;
+    else if (y>=params.annee_min-3 && y<=params.annee_max+3) score += 10;
+  } else if (params.annee_min && y>=params.annee_min) score += 20;
+  const tit = (film.title||'').toLowerCase();
+  const syn = (film.overview||'').toLowerCase();
+  (params.mots_cles_en||[]).forEach(kw => {
+    const k = String(typeof kw === 'string' ? kw : (kw && (kw.mot || kw.keyword || kw.name || kw.value)) || kw).toLowerCase();
+    if (tit.includes(k)) score += 20;
+    if (syn.includes(k)) score += 10;
+  });
+  return score;
+}
+
+// ── MOTEUR PRINCIPAL ──────────────────────────────────────────────
+async function lancerSLM() {
+  const query   = document.getElementById('slmInput').value.trim();
+  const tmdbKey = TMDB_API_KEY;
+  const omdbKey = OMDB_API_KEY;
+
+  if (!query) return;
+  if (!tmdbKey) { alert('Entre ta clé TMDB dans la configuration ci-dessus'); return; }
+
+  if (!OLLAMA_READY) {
+    alert("Clique d'abord sur '🔌 Vérifier la connexion' pour tester le serveur Ollama.");
+    return;
+  }
+
+  const btn     = document.getElementById('slmBtn');
+  const listEl  = document.getElementById('slmFilmsList');
+  const thinkEl = document.getElementById('geminiThinking');
+  const paramsEl= document.getElementById('geminiParams');
+  const resultsEl=document.getElementById('slmResults');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> ANALYSE...';
+  resultsEl.style.display = 'block';
+  thinkEl.classList.remove('visible');
+  listEl.innerHTML = '<div class="slm-no-results">🧠 Le modèle analyse ta requête en local...</div>';
+
+  try {
+    // ── ÉTAPE 1 : Qwen analyse la requête localement ────────────
+    let params;
+    try {
+      params = await interrogerModele(query);
+    } catch(e) {
+      listEl.innerHTML = `<div class="slm-no-results">❌ Erreur du modèle : ${e.message}</div>`;
+      btn.disabled=false; btn.textContent='🔍 CHERCHER'; return;
+    }
+
+    // Afficher ce que le modèle a compris
+    thinkEl.classList.add('visible');
+    const tags = [];
+    if (params.explication) tags.push(`<span style="color:var(--texte);font-size:11px;font-family:'Inter',sans-serif;">${params.explication}</span>`);
+    if (params.genres_tmdb?.length) tags.push(`<span class="slm-token tok-genre">🎭 ${params.genres_tmdb.map(id=>Object.keys(GENRE_IDS).find(k=>GENRE_IDS[k]===id)||id).filter((v,i,a)=>a.indexOf(v)===i).slice(0,3).join(', ')}</span>`);
+    if (params.langue) tags.push(`<span class="slm-token tok-lang">🗣️ ${LANG_LABELS[params.langue]||params.langue}</span>`);
+    if (params.annee_min||params.annee_max) tags.push(`<span class="slm-token tok-year">📅 ${params.annee_min||'?'}–${params.annee_max||'?'}</span>`);
+    if (params.realisateur) tags.push(`<span class="slm-token tok-person">🎬 ${params.realisateur}</span>`);
+    if (params.acteur) tags.push(`<span class="slm-token tok-person">⭐ ${params.acteur}</span>`);
+    paramsEl.innerHTML = tags.join('');
+
+    // ── ÉTAPE 2 : Pool local ────────────────────────────────────
+    btn.innerHTML = '<span class="spinner"></span> TMDB...';
+    let resultats = [];
+    if (POOL_GLOBAL.length > 0) {
+      const ls = POOL_GLOBAL.map(f => ({...f, slmScore: scorerFilm({
+        id:f.id, title:f.titreFR||f.titre, vote_average:f.tmdbNote,
+        vote_count:f.votes, original_language:f.langue,
+        genre_ids:f.genre_ids, release_date:f.annee?`${f.annee}-01-01`:'',
+        overview:f.synopsis
+      }, params)}));
+      resultats.push(...ls.filter(f=>f.slmScore>20).sort((a,b)=>b.slmScore-a.slmScore).slice(0,5).map(f=>({...f,_source:'pool'})));
+    }
+
+    // ── ÉTAPE 3 : Compléter via TMDB ────────────────────────────
+    const tmdbFilms  = await tmdbSearchAvecParams(tmdbKey, params);
+    const tmdbScored = tmdbFilms.map(f=>({...f,slmScore:scorerFilm(f,params),_source:'tmdb'})).sort((a,b)=>b.slmScore-a.slmScore);
+    const vus = new Set(resultats.map(f=>f.id));
+    for (const f of tmdbScored) { if(!vus.has(f.id)){resultats.push(f);vus.add(f.id);} if(resultats.length>=20) break; }
+
+    // ── ÉTAPE 4 : Enrichir et trier ─────────────────────────────
+    resultats.sort((a,b)=>b.slmScore-a.slmScore);
+    const top10 = resultats.slice(0, 10);
+    listEl.innerHTML = '<div class="slm-no-results">🎬 Récupération des détails...</div>';
+
+    for (const film of top10) {
+      if (!film.realisateur && film._source==='tmdb') {
+        try {
+          const det = await fetch(`/api/tmdb/movie/${film.id}?&append_to_response=credits&language=fr-FR`);
+          const dd  = await det.json();
+          film.titreFR     = dd.title || film.title;
+          film.synopsis    = dd.overview || film.overview || '';
+          film.genres      = dd.genres?.map(g=>g.name).join(', ') || '';
+          film.realisateur = dd.credits?.crew?.find(c=>c.job==='Director')?.name || '';
+          film.acteurs     = dd.credits?.cast?.slice(0,4).map(a=>a.name) || [];
+          film.tmdbNote    = film.tmdbNote || dd.vote_average || 0;
+          film.langue      = film.langue || dd.original_language || '';
+          film.poster      = film.poster || (dd.poster_path?`https://image.tmdb.org/t/p/w185${dd.poster_path}`:null);
+        } catch(e) {}
+      }
+      if (!film.imdbNote && omdbKey) {
+        try {
+          const titre = film.titreFR || film.title || '';
+          const annee = film.annee || (film.release_date?parseInt(film.release_date.substring(0,4)):0);
+          const or = await fetch(`/api/omdb?t=${encodeURIComponent(titre)}&y=${annee}&type=movie`);
+          const od = await or.json();
+          if (od.Response==='True') film.imdbNote = parseFloat(od.imdbRating)||null;
+        } catch(e) {}
+      }
+      await new Promise(r=>setTimeout(r,60));
+    }
+
+    // ── ÉTAPE 5 : Afficher triés par score ───────────────────────
+    top10.sort((a,b)=>b.slmScore-a.slmScore);
+    const maxScore = Math.max(...top10.map(f=>f.slmScore), 1);
+    document.getElementById('slmResultsSub').textContent = `${top10.length} film(s) — "${query}"`;
+    document.getElementById('slmSourceBadge').textContent = '🧠 Local × TMDB';
+
+    if (!top10.length) {
+      listEl.innerHTML = `<div class="slm-no-results">😔 Aucun résultat. Essaie une autre formulation.</div>`;
+    } else {
+      listEl.innerHTML = top10.map((f,i) => {
+        const pct   = Math.round((f.slmScore/maxScore)*100);
+        const titre = f.titreFR||f.title||'?';
+        const annee = f.annee||(f.release_date?parseInt(f.release_date.substring(0,4)):'?');
+        const langF = LANG_LABELS[f.langue||f.original_language]||(f.langue||'').toUpperCase();
+        const poster= f.poster||(f.poster_path?`https://image.tmdb.org/t/p/w185${f.poster_path}`:null);
+        const note  = f.imdbNote?`${f.imdbNote} ⭐`:((f.tmdbNote||f.vote_average||0).toFixed(1)+' 🎬');
+        const genL  = (f.genres||(f.genre_ids||[]).map(g=>Object.keys(GENRE_IDS).find(k=>GENRE_IDS[k]===g)||'').filter(Boolean).slice(0,2).join(', ')||'').split(',')[0].trim();
+        const rea   = f.realisateur||'';
+        const syn   = f.synopsis||f.overview||'';
+        return `
+        <div class="slm-film-card" style="animation-delay:${i*0.07}s">
+          ${poster?`<img class="slm-poster" src="${poster}" alt="${titre}" loading="lazy" onerror="this.className='slm-poster-ph';this.textContent='🎬'">`:`<div class="slm-poster-ph">🎬</div>`}
+          <div class="slm-film-info">
+            <div class="slm-film-title">${i+1}. ${titre}</div>
+            <div class="slm-film-meta">
+              <span class="tag tag-year">${annee}</span>
+              ${genL?`<span class="tag tag-genre">${genL}</span>`:''}
+              ${langF?`<span class="tag tag-lang">${langF}</span>`:''}
+              ${rea?`<span class="tag tok-person">🎬 ${rea}</span>`:''}
+            </div>
+            ${syn?`<div class="slm-film-synopsis">${syn}</div>`:''}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+              <div style="flex:1;">
+                <div class="slm-match-bar" style="width:${pct}%"></div>
+                <div class="slm-match-label">Pertinence SLM : ${pct}%</div>
+              </div>
+            </div>
+          </div>
+          <div class="slm-score-badge">${note}</div>
+        </div>`;
+      }).join('');
+    }
+
+  } catch(e) {
+    listEl.innerHTML = `<div class="slm-no-results">❌ ${e.message}</div>`;
+    console.error(e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔍 CHERCHER';
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// OPTIMISATIONS SÉCURITÉ & PERFORMANCE v2
+// ════════════════════════════════════════════════════════════════
+
+
+// ── INTERSECTION OBSERVER — lazy load images optimisé ────────────
+const imgObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const img = entry.target;
+    if (img.dataset.src) {
+      img.src = img.dataset.src;
+      img.removeAttribute('data-src');
+      imgObserver.unobserve(img);
+    }
+  });
+}, { rootMargin: '100px' });
+
+function observeImages() {
+  document.querySelectorAll('img[data-src]').forEach(img => imgObserver.observe(img));
+}
+
+// ── REQUEST DEDUPLICATION ────────────────────────────────────────
+const pendingRequests = new Map();
+
+async function fetchDedup(url, options = {}) {
+  if (pendingRequests.has(url)) return pendingRequests.get(url);
+  const p = fetchWithTimeout(url, options)
+    .finally(() => pendingRequests.delete(url));
+  pendingRequests.set(url, p);
+  return p;
+}
+
+// ── RATE LIMITER TMDB (40 req/sec max) ───────────────────────────
+const rateLimiter = (() => {
+  const queue = [];
+  let running = 0;
+  const MAX = 8; // requêtes parallèles max
+  const run = async () => {
+    while (queue.length && running < MAX) {
+      running++;
+      const { fn, resolve, reject } = queue.shift();
+      fn().then(resolve).catch(reject).finally(() => { running--; run(); });
+    }
+  };
+  return (fn) => new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    run();
+  });
+})();
+
+async function fetchRateLimited(url, options = {}) {
+  return rateLimiter(() => fetchDedup(url, options));
+}
+
+// ── VIRTUAL SCROLL : ne rendre que les cards visibles ────────────
+// Remplace le innerHTML = top.map(...).join('') par un rendu progressif
+function renderCardsProgressif(cards, container) {
+  container.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+
+  cards.forEach((html, i) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    const card = div.firstElementChild;
+    if (card) {
+      card.style.animationDelay = `${i * 0.08}s`;
+      fragment.appendChild(card);
+    }
+  });
+
+  container.appendChild(fragment);
+  // Observer les images après insertion
+  requestIdleCallback
+    ? requestIdleCallback(observeImages)
+    : setTimeout(observeImages, 100);
+}
+
+// ── CATCH VIDE → LOGS SILENCIEUX ────────────────────────────────
+// Remplace les catch{} vides par des logs silencieux en prod
+const _devMode = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+function silentCatch(e, context='') {
+  if (_devMode) console.warn(`[${context}]`, e?.message || e);
+}
+
+// ── SANITISATION ÉTENDUE ─────────────────────────────────────────
+// Version améliorée qui gère aussi les URLs malveillantes
+function sanitize(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\\/g, '&#x5C;')
+    .slice(0, 500); // longueur max pour éviter les DoS
+}
+
+function sanitizeUrl(url) {
+  if (!url) return '';
+  // N'autoriser que https:// et les URLs YouTube connues
+  if (!/^https:\/\/(www\.)?(youtube\.com|youtu\.be|image\.tmdb\.org|img\.omdbapi\.com)/.test(url)) return '';
+  return url;
+}
+
+// ── PERFORMANCE MARK (mesure des temps) ──────────────────────────
+const perf = {
+  start: (label) => performance.mark(`${label}_start`),
+  end:   (label) => {
+    performance.mark(`${label}_end`);
+    try {
+      performance.measure(label, `${label}_start`, `${label}_end`);
+      if (_devMode) {
+        const m = performance.getEntriesByName(label).pop();
+        console.log(`[PERF] ${label}: ${m?.duration?.toFixed(0)}ms`);
+      }
+    } catch(e) {}
+  }
+};
+
+// ── FILM DU JOUR ──────────────────────────────────────────────────
+// La date du jour est utilisée comme seed déterministe :
+// même jour → même film pour tous les utilisateurs.
+// Seed = YYYYMMDD converti en entier.
+async function chargerFilmDuJour() {
+  const tmdbKey = TMDB_API_KEY;
+  if (!tmdbKey) return;
+
+  const now  = new Date();
+  const yyyy = now.getFullYear();
+  const mm   = String(now.getMonth() + 1).padStart(2, '0');
+  const dd   = String(now.getDate()).padStart(2, '0');
+  const dateStr = `${dd}/${mm}/${yyyy}`;
+  const seed    = parseInt(`${yyyy}${mm}${dd}`); // ex: 20260703
+
+  document.getElementById('fdjDate').textContent = `${dateStr} — change chaque jour`;
+
+  // LCG déterministe avec la date comme seed
+  // → même date = même séquence = même film sélectionné
+  let rngState = seed >>> 0;
+  const rng = () => { rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0; return rngState / 0xFFFFFFFF; };
+
+  try {
+    // On tire une page aléatoire parmi les 20 premières pages TMDB
+    // et un index dans cette page — déterministe selon la date
+    const page  = Math.floor(rng() * 15) + 1;
+    const idx   = Math.floor(rng() * 20);
+
+    const url = `/api/tmdb/discover/movie?`
+      + `&sort_by=vote_average.desc&vote_count.gte=5000&page=${page}`;
+    const r = await fetch(url);
+    const d = await r.json();
+    const films = d.results || [];
+    if (!films.length) return;
+
+    const film = films[idx % films.length];
+
+    // Détails complets
+    const det = await (await fetch(
+      `/api/tmdb/movie/${film.id}?&language=fr-FR`
+    )).json();
+
+    // Poster
+    const posterEl = document.getElementById('fdjPoster');
+    if (det.poster_path) {
+      posterEl.outerHTML = `<img class="fdj-poster" id="fdjPoster" src="https://image.tmdb.org/t/p/w185${det.poster_path}" alt="${det.title}">`;
+    }
+
+    // Titre
+    document.getElementById('fdjTitre').textContent = det.title || film.title;
+
+    // Meta tags
+    const annee   = det.release_date ? det.release_date.substring(0,4) : '?';
+    const genres  = det.genres?.slice(0,2).map(g=>g.name).join(' · ') || '';
+    const pays    = det.production_countries?.[0]?.iso_3166_1 || '';
+    document.getElementById('fdjMeta').innerHTML =
+      `<span class="tag tag-year">${annee}</span>` +
+      (genres ? `<span class="tag tag-genre">${genres}</span>` : '') +
+      (pays   ? `<span class="tag tag-pays">${pays}</span>` : '') +
+      (det.runtime ? `<span class="tag tag-lang">${det.runtime} min</span>` : '');
+
+    // Synopsis
+    document.getElementById('fdjSynopsis').textContent = det.overview || '';
+
+    // Scores
+    document.getElementById('fdjTmdb').textContent = (det.vote_average||0).toFixed(1);
+
+    // Note IMDB via OMDB
+    const omdbKey = OMDB_API_KEY;
+    if (omdbKey) {
+      try {
+        const or = await fetch(`/api/omdb?t=${encodeURIComponent(det.title)}&y=${annee}&type=movie`);
+        const od = await or.json();
+        if (od.Response === 'True' && od.imdbRating && od.imdbRating !== 'N/A') {
+          document.getElementById('fdjImdb').textContent = od.imdbRating;
+        }
+      } catch(e) {}
+    }
+  } catch(e) {
+    document.getElementById('fdjDate').textContent = 'Erreur de chargement';
+  }
+}
+
+// Charger le film du jour au démarrage (après un court délai)
+window.addEventListener('load', () => setTimeout(chargerFilmDuJour, 800));
+
+
+// ════════════════════════════════════════════════════════════════
+// SÉCURITÉ & PERFORMANCE — Module utilitaires
+// ════════════════════════════════════════════════════════════════
+
+// ── SANITISATION XSS ─────────────────────────────────────────────
+// Échappe les caractères HTML dangereux dans toute donnée externe
+// sanitize() définie dans le module optimisations ci-dessus
+
+// ── VALIDATION DES INPUTS ─────────────────────────────────────────
+function validerCle(cle, type) {
+  if (!cle || cle.trim() === '') return false;
+  const patterns = {
+    tmdb:  /^[a-f0-9]{32}$/i,            // 32 hex chars
+    omdb:  /^[a-f0-9]{8}$/i,             // 8 hex chars
+    hf:    /^hf_[A-Za-z0-9]{30,}$/,      // hf_ + chars
+    groq:  /^gsk_[A-Za-z0-9]{50,}$/,     // gsk_ + chars
+  };
+  return patterns[type] ? patterns[type].test(cle.trim()) : cle.trim().length > 8;
+}
+
+function validerQuery(q) {
+  if (!q || q.trim().length < 2) return false;
+  if (q.length > 500) return false;
+  // Rejeter les injections de script
+  if (/<script|javascript:|on\w+=/i.test(q)) return false;
+  return true;
+}
+
+// ── CACHE API ─────────────────────────────────────────────────────
+// Évite de re-fetcher les mêmes URLs pendant la session
+const apiCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function fetchCached(url, options = {}) {
+  const key = url;
+  const now = Date.now();
+  if (apiCache.has(key)) {
+    const { data, ts } = apiCache.get(key);
+    if (now - ts < CACHE_TTL) return data;
+  }
+  const data = await fetchWithTimeout(url, options);
+  apiCache.set(key, { data, ts: now });
+  return data;
+}
+
+// ── FETCH AVEC TIMEOUT ET RETRY ───────────────────────────────────
+async function fetchWithTimeout(url, options = {}, timeoutMs = 60000, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      if (!r.ok && attempt < retries && r.status >= 500) {
+        await new Promise(res => setTimeout(res, 600 * (attempt + 1)));
+        continue;
+      }
+      return r;
+    } catch(e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') {
+        if (attempt < retries) { await new Promise(res => setTimeout(res, 800)); continue; }
+        throw new Error(`Timeout après ${timeoutMs/1000}s`);
+      }
+      if (attempt < retries) { await new Promise(res => setTimeout(res, 600)); continue; }
+      throw e;
+    }
+  }
+}
+
+// ── DEBOUNCE ─────────────────────────────────────────────────────
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+}
+
+// ── DÉTECTION RÉSEAU ──────────────────────────────────────────────
+window.addEventListener('online',  () => showToast('✅ Connexion rétablie', 'vert'));
+window.addEventListener('offline', () => showToast('⚠️ Hors ligne — les API TMDB/OMDB ne sont pas disponibles', 'rouge'));
+
+// ── TOAST NOTIFICATIONS ───────────────────────────────────────────
+function showToast(msg, couleur = 'or') {
+  const colors = { or:'var(--or)', vert:'var(--vert)', rouge:'var(--rouge)', violet:'var(--violet)' };
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;
+    background:var(--panneau);border:1px solid ${colors[couleur]||colors.or};
+    color:var(--texte);padding:12px 18px;border-radius:10px;font-size:13px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);animation:slideIn 0.3s ease;
+    max-width:320px;line-height:1.5;`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity 0.4s'; setTimeout(()=>t.remove(), 400); }, 3500);
+}
+
+// ── LOCALSTORAGE : sauvegarde/restauration des clés ───────────────
+const STORAGE_KEY = 'cineforest_keys';
+
+function sauvegarderCles() {
+  const cles = {
+    tmdb: TMDB_API_KEY || '',
+    omdb: OMDB_API_KEY || '',
+  };
+  // Encodage basique (obfuscation légère — pas du vrai chiffrement,
+  // mais évite la lecture triviale dans les outils de dev)
+  try { localStorage.setItem(STORAGE_KEY, btoa(JSON.stringify(cles))); } catch(e) {}
+}
+
+function restaurerCles() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const cles = JSON.parse(atob(raw));
+    // clé TMDB intégrée — pas de champ à restaurer
+    // clé OMDB intégrée — pas de champ à restaurer
+  } catch(e) {}
+}
+
+// Sauvegarder automatiquement à chaque frappe dans les champs de clés
+document.addEventListener('DOMContentLoaded', () => {
+  // clés intégrées — pas de restauration nécessaire
+});
+
+// ── POOL CACHE : éviter de recharger si les params n'ont pas changé ──
+let DERNIERS_PARAMS_HASH = '';
+
+function hashParams(params) {
+  return JSON.stringify(params);
+}
+
+function paramsChanges(newParams) {
+  const h = hashParams(newParams);
+  if (h === DERNIERS_PARAMS_HASH) return false;
+  DERNIERS_PARAMS_HASH = h;
+  return true;
+}
+
+// ── DEBOUNCE sur le bouton recherche SLM ─────────────────────────
+const lancerSLMDebounced = debounce(lancerSLM, 300);
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('slmInput');
+  if (input) {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); lancerSLMDebounced(); }
+    });
+  }
+});
+
+// ── NETTOYAGE CONSOLE EN PRODUCTION ──────────────────────────────
+// On garde les erreurs, on retire les logs de debug
+const _origLog = console.log;
+console.log = (...args) => {
+  // Garder uniquement les logs préfixés [SLM] pour le debug
+  if (args[0] && String(args[0]).startsWith('[SLM')) _origLog(...args);
+};
+
+// ── INDICATEUR DE CHARGEMENT GLOBAL ──────────────────────────────
+function setGlobalLoading(actif) {
+  document.getElementById('btnRun').disabled = actif;
+  document.body.style.cursor = actif ? 'wait' : '';
+}
+
+// ── VALIDATION AVANT LANCEMENT ────────────────────────────────────
+function validerAvantLancement() {
+  const tmdb = TMDB_API_KEY;
+  const genres = [...document.querySelectorAll('.genre-chip.active input')];
+
+  if (!navigator.onLine) {
+    showToast('⚠️ Pas de connexion internet', 'rouge');
+    return false;
+  }
+  if (!tmdb) {
+    showToast('⚠️ Entre ta clé TMDB', 'rouge');
+    // focus non applicable (clé intégrée)
+    return false;
+  }
+  if (!genres.length) {
+    showToast('⚠️ Sélectionne au moins un genre', 'rouge');
+    return false;
+  }
+  return true;
+}
+
+</script>
+</body>
+</html>

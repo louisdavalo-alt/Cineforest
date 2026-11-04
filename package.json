@@ -1,0 +1,19 @@
+{
+  "name": "cineforest",
+  "version": "1.0.0",
+  "description": "CinéForest — recommandation de films en langage naturel, connectée à Ollama via un proxy Node",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20.12"
+  }
+}

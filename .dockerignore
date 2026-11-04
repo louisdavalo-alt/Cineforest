@@ -1,0 +1,9 @@
+# Évite de copier les secrets et les dépendances locales dans l'image Docker
+.env
+.env.*
+!.env.example
+node_modules
+.git
+.github
+docs
+*.log
